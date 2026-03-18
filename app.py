@@ -1,0 +1,168 @@
+import streamlit as st
+import feedparser
+import google.generativeai as genai
+import json
+import pandas as pd
+from github import Github
+from datetime import datetime
+from bs4 import BeautifulSoup
+
+# --- 1. 설정 및 보안 ---
+GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
+REPO_NAME = st.secrets["REPO_NAME"] 
+GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
+
+genai.configure(api_key=GEMINI_API_KEY)
+model = genai.GenerativeModel('gemini-flash-latest')
+
+g = Github(GITHUB_TOKEN)
+repo = g.get_repo(REPO_NAME)
+
+# --- 2. GitHub JSON 데이터 관리 함수 ---
+def load_json_from_github(file_path, default_data):
+    try:
+        content = repo.get_contents(file_path)
+        return json.loads(content.decoded_content.decode('utf-8'))
+    except:
+        return default_data
+
+def save_json_to_github(file_path, data, message):
+    content = json.dumps(data, ensure_ascii=False, indent=4)
+    try:
+        curr_file = repo.get_contents(file_path)
+        repo.update_file(file_path, message, content, curr_file.sha)
+    except:
+        repo.create_file(file_path, message, content)
+
+# --- 3. 뉴스 수집 및 분석 로직 ---
+def fetch_and_analyze():
+    feeds = load_json_from_github("feeds.json", [])
+    news_archive = load_json_from_github("news_data.json", {})
+    
+    today = datetime.now().strftime("%Y-%m-%d")
+    all_headlines = []
+
+    for url in feeds:
+        feed = feedparser.parse(url)
+        for entry in feed.entries[:3]: 
+            summary_text = BeautifulSoup(entry.description, 'html.parser').text[:300]
+            all_headlines.append(f"제목: {entry.title}\n요약: {summary_text}")
+
+    prompt = f"""
+    당신은 IT 전문 뉴스 큐레이터입니다. 다음은 오늘 수집된 국내 IT 및 AI 뉴스들입니다.
+    날짜: {today}
+    
+    내용:
+    {all_headlines}
+    
+    위 내용을 바탕으로 오늘 반드시 알아야 할 '핵심 브리핑'을 5가지 섹션으로 정리해줘. 
+    각 섹션은 이모지와 함께 요약하고 시사점을 포함해줘. 한국어로 작성해줘.
+    """
+    
+    response = model.generate_content(prompt)
+    news_archive[today] = response.text
+    
+    save_json_to_github("news_data.json", news_archive, f"Update news for {today}")
+    return response.text
+
+# --- 4. 통계 관리 ---
+def update_stats():
+    stats = load_json_from_github("stats.json", {"views": 0, "history": {}})
+    today = datetime.now().strftime("%Y-%m-%d")
+    stats["views"] += 1
+    stats["history"][today] = stats["history"].get(today, 0) + 1
+    save_json_to_github("stats.json", stats, "Update visitor stats")
+    return stats
+
+# --- 5. UI 구성 ---
+st.set_page_config(page_title="AI IT Newsroom", layout="wide")
+
+menu = st.sidebar.selectbox("메뉴", ["뉴스룸 브리핑", "관리자 대시보드"])
+
+if menu == "뉴스룸 브리핑":
+    stats = update_stats()
+    st.title("🚀 나만의 AI IT 뉴스룸")
+    st.caption(f"총 방문수: {stats['views']} | 오늘 날짜: {datetime.now().strftime('%Y-%m-%d')}")
+    
+    news_archive = load_json_from_github("news_data.json", {})
+    sorted_dates = sorted(news_archive.keys(), reverse=True)
+    
+    if not sorted_dates:
+        st.info("아직 분석된 뉴스가 없습니다. 관리자 대시보드에서 수집을 시작하세요.")
+    else:
+        for date in sorted_dates:
+            with st.expander(f"📅 {date} 주요 IT 뉴스 브리핑", expanded=(date == sorted_dates[0])):
+                st.markdown(news_archive[date])
+
+elif menu == "관리자 대시보드":
+    st.title("🛠 관리자 대시보드")
+    
+    pw = st.text_input("관리자 암호를 입력하세요", type="password")
+    if pw == st.secrets.get("ADMIN_PASSWORD", "1234"):
+        
+        tab1, tab2, tab3, tab4 = st.tabs(["RSS 관리", "데이터 수집/분석", "접속 통계", "자동 수집 설정"])
+        
+        with tab1:
+            st.subheader("RSS 피드 목록")
+            feeds = load_json_from_github("feeds.json", [])
+            new_feed = st.text_input("새 RSS URL 추가 (예: 블로터, ZDNet 등)")
+            if st.button("추가"):
+                feeds.append(new_feed)
+                save_json_to_github("feeds.json", feeds, "Add new RSS feed")
+                st.success("추가되었습니다.")
+            
+            st.write("현재 목록:")
+            for i, url in enumerate(feeds):
+                col1, col2 = st.columns([0.8, 0.2])
+                col1.write(url)
+                if col2.button("삭제", key=f"del_{i}"):
+                    feeds.pop(i)
+                    save_json_to_github("feeds.json", feeds, "Delete RSS feed")
+                    st.rerun()
+
+        with tab2:
+            st.subheader("AI 분석 실행")
+            if st.button("지금 뉴스 수집 및 Gemini 분석 시작"):
+                with st.spinner("AI가 뉴스를 읽고 브리핑을 작성 중입니다..."):
+                    result = fetch_and_analyze()
+                    st.success("분석 완료!")
+                    st.markdown(result)
+
+        with tab3:
+            st.subheader("방문자 통계")
+            stats = load_json_from_github("stats.json", {"views": 0, "history": {}})
+            st.metric("누적 방문자수", stats["views"])
+            if stats["history"]:
+                df = pd.DataFrame(list(stats["history"].items()), columns=["날짜", "방문수"])
+                st.line_chart(df.set_index("날짜"))
+
+        with tab4:
+            st.subheader("자동 수집 스케줄 설정")
+            st.write("GitHub Actions를 통해 정해진 요일과 시간에 자동으로 뉴스를 수집합니다.")
+            settings = load_json_from_github("settings.json", {
+                "fetch_time": "08:00",
+                "days": ["월", "화", "수", "목", "금", "토", "일"]
+            })
+            
+            try:
+                default_time = datetime.strptime(settings.get("fetch_time", "08:00"), "%H:%M").time()
+            except:
+                default_time = datetime.strptime("08:00", "%H:%M").time()
+            
+            days_of_week = ["월", "화", "수", "목", "금", "토", "일"]
+            selected_days = st.multiselect(
+                "수집할 요일 선택",
+                options=days_of_week,
+                default=settings.get("days", days_of_week)
+            )
+            
+            selected_time = st.time_input("수집할 시간 지정 (예: 08:00)", value=default_time)
+            
+            if st.button("스케줄 저장"):
+                settings["fetch_time"] = selected_time.strftime("%H:%M")
+                settings["days"] = selected_days
+                save_json_to_github("settings.json", settings, "Update fetch schedule setting")
+                st.success(f"매주 {', '.join(selected_days)}요일 {selected_time.strftime('%H:%M')}에 뉴스를 자동 수집하도록 설정되었습니다! \n(GitHub Repository Secrets 설정이 완료되어 있어야 작동합니다.)")
+
+    else:
+        st.error("암호가 틀렸습니다.")

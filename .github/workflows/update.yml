@@ -1,0 +1,33 @@
+name: Scheduled News Update
+
+on:
+  schedule:
+    # Runs at minute 15 of every hour
+    - cron: '15 * * * *'
+  workflow_dispatch:
+    # Allow manual triggers from GitHub UI
+
+jobs:
+  run-update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install Dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pytz
+
+      - name: Run Background Update Task
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          REPO_NAME: ${{ secrets.REPO_NAME }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          MANUAL_TRIGGER: ${{ github.event_name == 'workflow_dispatch' }}
+        run: python update_task.py
