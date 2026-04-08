@@ -8,16 +8,28 @@ from datetime import datetime
 from bs4 import BeautifulSoup
 
 # --- 1. 설정 및 보안 ---
+REQUIRED_SECRETS = ["GITHUB_TOKEN", "REPO_NAME", "GEMINI_API_KEY"]
+missing_secrets = [key for key in REQUIRED_SECRETS if key not in st.secrets]
+
+if missing_secrets:
+    st.error(f"누락된 Streamlit Secrets: {', '.join(missing_secrets)}")
+    st.stop()
+
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
-REPO_NAME = st.secrets["REPO_NAME"] 
+REPO_NAME = st.secrets["REPO_NAME"]
 GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
+ADMIN_PASSWORD = st.secrets.get("ADMIN_PASSWORD", "1234")
 
 genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel("gemini-1.5-flash")
 
-g = Github(GITHUB_TOKEN)
-repo = g.get_repo(REPO_NAME)
-
+try:
+    g = Github(GITHUB_TOKEN)
+    repo = g.get_repo(REPO_NAME)
+except Exception as e:
+    st.error(f"GitHub 연결 오류: {e}")
+    st.stop()
+ 
 # --- 2. GitHub JSON 데이터 관리 함수 ---
 def load_json_from_github(file_path, default_data):
     try:
@@ -30,40 +42,86 @@ def save_json_to_github(file_path, data, message):
     content = json.dumps(data, ensure_ascii=False, indent=4)
     try:
         curr_file = repo.get_contents(file_path)
-        repo.update_file(file_path, message, content, curr_file.sha)
-    except:
-        repo.create_file(file_path, message, content)
+        repo.update_file(curr_file.path, message, content, curr_file.sha)
+    except Exception:
+        try:
+            repo.create_file(file_path, message, content)
+        except Exception as e:
+            st.error(f"{file_path} 저장 오류: {e}")
 
 # --- 3. 뉴스 수집 및 분석 로직 ---
 def fetch_and_analyze():
     feeds = load_json_from_github("feeds.json", [])
     news_archive = load_json_from_github("news_data.json", {})
-    
+
     today = datetime.now().strftime("%Y-%m-%d")
     all_headlines = []
 
+    if not feeds:
+        return "등록된 RSS 피드가 없습니다. 관리자 대시보드에서 RSS를 먼저 추가하세요."
+
     for url in feeds:
-        feed = feedparser.parse(url)
-        for entry in feed.entries[:3]: 
-            summary_text = BeautifulSoup(entry.description, 'html.parser').text[:300]
-            all_headlines.append(f"제목: {entry.title}\n요약: {summary_text}")
+        try:
+            feed = feedparser.parse(url)
+
+            if not getattr(feed, "entries", None):
+                continue
+
+            for entry in feed.entries[:3]:
+                title = str(getattr(entry, "title", "")).strip()
+                desc = str(
+                    getattr(entry, "description", "") or getattr(entry, "summary", "")
+                ).strip()
+
+                if not title and not desc:
+                    continue
+
+                summary_text = BeautifulSoup(desc, "html.parser").text.strip()[:300]
+
+                if not title:
+                    title = "제목 없음"
+                if not summary_text:
+                    summary_text = "요약 없음"
+
+                all_headlines.append(f"제목: {title}\n요약: {summary_text}")
+
+        except Exception:
+            continue
+
+    if not all_headlines:
+        return "수집된 뉴스가 없습니다. RSS 주소 또는 피드 내용을 확인하세요."
+
+    news_text = "\n\n".join(all_headlines[:10]).strip()
+
+    if not news_text:
+        return "뉴스 본문이 비어 있습니다."
 
     prompt = f"""
-    당신은 IT 전문 뉴스 큐레이터입니다. 다음은 오늘 수집된 국내 IT 및 AI 뉴스들입니다.
-    날짜: {today}
-    
-    내용:
-    {all_headlines}
-    
-    위 내용을 바탕으로 오늘 반드시 알아야 할 '핵심 브리핑'을 5가지 섹션으로 정리해줘. 
-    각 섹션은 이모지와 함께 요약하고 시사점을 포함해줘. 한국어로 작성해줘.
-    """
-    
-    response = model.generate_content(prompt)
-    news_archive[today] = response.text
-    
+당신은 IT 전문 뉴스 큐레이터입니다.
+다음은 오늘 수집된 국내 IT 및 AI 뉴스입니다.
+날짜: {today}
+
+내용:
+{news_text}
+
+위 내용을 바탕으로 오늘 반드시 알아야 할 핵심 브리핑을 5가지 섹션으로 정리해줘.
+각 섹션은 이모지와 함께 요약하고 시사점을 포함해줘.
+한국어로 작성해줘.
+""".strip()
+
+    try:
+        response = model.generate_content(prompt)
+        result_text = getattr(response, "text", "").strip()
+
+        if not result_text:
+            return "Gemini 응답이 비어 있습니다."
+
+    except Exception as e:
+        return f"Gemini 호출 오류: {e}"
+
+    news_archive[today] = result_text
     save_json_to_github("news_data.json", news_archive, f"Update news for {today}")
-    return response.text
+    return result_text
 
 # --- 4. 통계 관리 ---
 def update_stats():
