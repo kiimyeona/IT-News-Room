@@ -24,7 +24,7 @@ from bs4 import BeautifulSoup
 # --- 1. 설정 및 보안 ---
 # Streamlit Cloud의 Secrets에서 불러옵니다.
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
-REPO_NAME = st.secrets["REPO_NAME"] # 예: "username/my-newsroom"
+REPO_NAME = st.secrets["REPO_NAME"]
 GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
 
 genai.configure(api_key=GEMINI_API_KEY)
