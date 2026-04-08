@@ -13,7 +13,7 @@ REPO_NAME = st.secrets["REPO_NAME"]
 GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
 
 genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel('gemini-flash-latest')
+model = genai.GenerativeModel("gemini-1.5-flash")
 
 g = Github(GITHUB_TOKEN)
 repo = g.get_repo(REPO_NAME)
