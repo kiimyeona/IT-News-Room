@@ -43,11 +43,14 @@ def save_json_to_github(file_path, data, message):
     try:
         curr_file = repo.get_contents(file_path)
         repo.update_file(curr_file.path, message, content, curr_file.sha)
-    except Exception:
-        try:
-            repo.create_file(file_path, message, content)
-        except Exception as e:
-            st.error(f"{file_path} 저장 오류: {e}")
+    except Exception as e:
+        if "404" in str(e):
+            try:
+                repo.create_file(file_path, message, content)
+            except Exception as e2:
+                st.error(f"{file_path} 생성 오류: {e2}")
+        else:
+            st.error(f"{file_path} 업데이트 오류: {e}")
 
 # --- 3. 뉴스 수집 및 분석 로직 ---
 def fetch_and_analyze():
