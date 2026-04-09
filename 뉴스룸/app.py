@@ -71,7 +71,18 @@ def fetch_and_analyze():
             if not getattr(feed, "entries", None):
                 continue
 
-            for entry in feed.entries[:3]:
+            import time
+            collected = 0
+            for entry in feed.entries:
+                if collected >= 3:
+                    break
+                
+                pub_parsed = getattr(entry, "published_parsed", None)
+                if pub_parsed:
+                    # 48시간(2일) 초과된 과거 기사는 무시
+                    if (time.time() - time.mktime(pub_parsed)) > 2 * 24 * 3600:
+                        continue
+
                 title = str(getattr(entry, "title", "")).strip()
                 desc = str(
                     getattr(entry, "description", "") or getattr(entry, "summary", "")
@@ -88,6 +99,7 @@ def fetch_and_analyze():
                     summary_text = "요약 없음"
 
                 all_headlines.append(f"제목: {title}\n요약: {summary_text}")
+                collected += 1
 
         except Exception:
             continue
@@ -110,6 +122,7 @@ def fetch_and_analyze():
 {{news_text}}
 
 위 내용 중 AI와 관련된 뉴스를 중심으로 오늘의 핵심 5가지를 정리해주세요.
+!!! 매우 중요: 반드시 아래 제공된 뉴스 본문 내용만을 근거로 작성하고, 학습된 배경 지식으로 내용을 보완하거나 임의로 추가하지 마세요 !!!
 !!! 매우 중요: 각 뉴스 항목은 반드시 아래의 마크다운(Markdown) 구조와 기호를 100% 똑같이 사용해서 작성해야 합니다. 형태를 절대 임의로 바꾸지 말고, 항목 사이에 반드시 "한 줄 띄어쓰기(빈 줄)"를 넣으세요 !!!
 
 #### 1. [뉴스 내용과 가장 잘 어울리는 이모지 1개] [각 소식의 핵심 제목]  
