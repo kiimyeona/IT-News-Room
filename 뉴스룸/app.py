@@ -78,10 +78,10 @@ def fetch_and_analyze():
                     break
                 
                 pub_parsed = getattr(entry, "published_parsed", None)
-                if pub_parsed:
-                    # 48시간(2일) 초과된 과거 기사는 무시
-                    if (time.time() - time.mktime(pub_parsed)) > 2 * 24 * 3600:
-                        continue
+                if pub_parsed is None:
+                    continue  # 날짜 정보 없는 기사는 제외
+                if (time.time() - time.mktime(pub_parsed)) > 2 * 24 * 3600:
+                    continue  # 48시간 초과 기사 제외
 
                 title = str(getattr(entry, "title", "")).strip()
                 desc = str(
