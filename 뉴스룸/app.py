@@ -21,7 +21,7 @@ GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
 ADMIN_PASSWORD = st.secrets.get("ADMIN_PASSWORD", "1234")
 
 genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel("gemini-flash-latest")
+model = genai.GenerativeModel("gemini-1.5-flash")
 
 try:
     g = Github(GITHUB_TOKEN)
@@ -96,13 +96,13 @@ def fetch_and_analyze():
     if not news_text:
         return "뉴스 본문이 비어 있습니다."
 
-prompt = f"""
+    prompt = f"""
 당신은 AI 트렌드를 쉽게 설명하는 뉴스 큐레이터입니다.
 다음은 오늘 수집된 뉴스입니다.
-날짜: {today}
+날짜: {{today}}
 
 내용:
-{news_text}
+{{news_text}}
 
 위 내용 중 AI와 관련된 뉴스를 중심으로 오늘의 핵심 5가지를 정리해주세요.
 작성 규칙:
@@ -149,7 +149,7 @@ if menu == "뉴스룸 브리핑":
 
     col1, col2 = st.columns([0.7, 0.3])
     with col1:
-        st.title("🚀 AXDX팀의 AI 뉴스룸")
+        st.title("🚀  AI 뉴스룸")
         st.caption(f"총 방문수: {stats['views']} | 오늘 날짜: {datetime.now().strftime('%Y-%m-%d')}")
     
     with col2:
