@@ -5,6 +5,7 @@ import json
 import pandas as pd
 from github import Github
 from datetime import datetime
+import pytz
 from bs4 import BeautifulSoup
 
 # --- 1. 설정 및 보안 ---
@@ -57,7 +58,7 @@ def fetch_and_analyze():
     feeds = load_json_from_github("feeds.json", [])
     news_archive = load_json_from_github("news_data.json", {})
 
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = datetime.now(pytz.timezone('Asia/Seoul')).strftime("%Y-%m-%d")
     all_headlines = []
 
     if not feeds:
@@ -141,7 +142,7 @@ def fetch_and_analyze():
 # --- 4. 통계 관리 ---
 def update_stats():
     stats = load_json_from_github("stats.json", {"views": 0, "history": {}})
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = datetime.now(pytz.timezone('Asia/Seoul')).strftime("%Y-%m-%d")
     stats["views"] += 1
     stats["history"][today] = stats["history"].get(today, 0) + 1
     save_json_to_github("stats.json", stats, "Update visitor stats")
@@ -160,7 +161,7 @@ if menu == "뉴스룸 브리핑":
     col1, col2 = st.columns([0.7, 0.3])
     with col1:
         st.title("🚀 AI 뉴스룸")
-        st.caption(f"총 방문수: {stats['views']} | 오늘 날짜: {datetime.now().strftime('%Y-%m-%d')}")
+        st.caption(f"총 방문수: {stats['views']} | 오늘 날짜: {datetime.now(pytz.timezone('Asia/Seoul')).strftime('%Y-%m-%d')}")
     
     with col2:
         if sorted_dates:
