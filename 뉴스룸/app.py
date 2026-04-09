@@ -110,7 +110,7 @@ def fetch_and_analyze():
 - AI 용어는 괄호 안에 한 줄로 설명을 추가해주세요
 - 각 뉴스가 우리 일상이나 업무에 어떤 변화를 가져오는지 한 줄로 써주세요
 - 딱딱하지 않고 대화하듯 자연스러운 문체로 써주세요
-- AI 관련 뉴스가 부족하면 기술 트렌드 뉴스로 채워주세요
+- AI 관련 뉴스를 중점적으로 다뤄주세요
 - 한국어로 작성해주세요
 """.strip()
 
@@ -138,7 +138,7 @@ def update_stats():
     return stats
 
 # --- 5. UI 구성 ---
-st.set_page_config(page_title="AI IT Newsroom", layout="wide")
+st.set_page_config(page_title="AI Newsroom", layout="wide")
 
 menu = st.sidebar.selectbox("메뉴", ["뉴스룸 브리핑", "관리자 대시보드"])
 
@@ -149,7 +149,7 @@ if menu == "뉴스룸 브리핑":
 
     col1, col2 = st.columns([0.7, 0.3])
     with col1:
-        st.title("🚀  AI 뉴스룸")
+        st.title("🚀 AI 뉴스룸")
         st.caption(f"총 방문수: {stats['views']} | 오늘 날짜: {datetime.now().strftime('%Y-%m-%d')}")
     
     with col2:
@@ -166,10 +166,10 @@ if menu == "뉴스룸 브리핑":
     else:
         if selected_date == "전체 보기":
             for date in sorted_dates:
-                with st.expander(f"📅 {date} 주요 IT 뉴스 브리핑", expanded=(date == sorted_dates[0])):
+                with st.expander(f"📅 {date} 주요 AI 뉴스 브리핑", expanded=(date == sorted_dates[0])):
                     st.markdown(news_archive[date])
         else:
-            st.subheader(f"📅 {selected_date} 주요 IT 뉴스 브리핑")
+            st.subheader(f"📅 {selected_date} 주요 AI 뉴스 브리핑")
             st.markdown(news_archive[selected_date])
 
 elif menu == "관리자 대시보드":
